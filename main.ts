@@ -19,5 +19,13 @@ if (typeof post !== 'object' || post === null || typeof post.url !== 'string') {
   throw new Error('POST.json must be a JSON object with a string "url" field');
 }
 
+// The gate only accepts an X post address, so fail loudly on a wrong
+// host or scheme instead of handing the grader a typo. The placeholder
+// still passes this shape check; the gate itself refuses it.
+const postUrl = new URL(post.url);
+if (postUrl.protocol !== 'https:' || !/(^|\.)(x\.com|twitter\.com)$/.test(postUrl.hostname)) {
+  throw new Error(`POST.json url must be an https://x.com or twitter.com post address, got: ${post.url}`);
+}
+
 mkdirSync(outputDir, { recursive: true });
 writeFileSync(join(outputDir, 'POST.json'), postText);
