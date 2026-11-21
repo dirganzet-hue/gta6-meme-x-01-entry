@@ -1,31 +1,47 @@
-// gta6-meme-x-01 entry: the post on X is the entry, and this program hands
-// the grader its address. It reads POST.json from the repository root,
-// checks it is a JSON object with a url string, and writes those exact
-// bytes to the output directory. Nothing else is written, so the two runs
-// the grader makes always produce identical output.
+// gta6-meme-x-01 (revision): the entry is a post on X, and this program
+// is the courier that hands its address to the grader.
 //
-// Run locally the way the grader does:
+// It reads POST.json from the repository root, insists the url field is
+// a real https://x.com (or twitter.com) post address, and writes the
+// file's exact bytes to the output directory. Nothing else is written,
+// so the grader's two runs always land on identical bytes.
+//
+// Run it exactly the way the grader does:
 //   mkdir -p out && MAKEFUN_BOT_DIR=. MAKEFUN_OUTPUT_DIR=out node main.ts
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+function loadPost(repoDir: string): { text: string; url: string } {
+  // The exact bytes are preserved: the file is written out untouched,
+  // so the grader's two runs always produce identical output.
+  const text = readFileSync(join(repoDir, 'POST.json'), 'utf8');
+  const post: unknown = JSON.parse(text);
+  if (
+    typeof post !== 'object' ||
+    post === null ||
+    typeof (post as { url?: unknown }).url !== 'string'
+  ) {
+    throw new Error('POST.json must be a JSON object with a string "url" field');
+  }
+  return { text, url: (post as { url: string }).url };
+}
+
+function assertXPost(url: string): void {
+  const parsed = new URL(url);
+  const hostOk = /(^|\.)(x\.com|twitter\.com)$/.test(parsed.hostname);
+  if (parsed.protocol !== 'https:' || !hostOk) {
+    throw new Error(
+      `POST.json url must be an https://x.com or twitter.com post address, got: ${url}`,
+    );
+  }
+}
+
 const repoDir = process.env.MAKEFUN_BOT_DIR ?? '/bot';
 const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-const postText = readFileSync(join(repoDir, 'POST.json'), 'utf8');
-const post = JSON.parse(postText);
-if (typeof post !== 'object' || post === null || typeof post.url !== 'string') {
-  throw new Error('POST.json must be a JSON object with a string "url" field');
-}
-
-// The gate only accepts an X post address, so fail loudly on a wrong
-// host or scheme instead of handing the grader a typo. The placeholder
-// still passes this shape check; the gate itself refuses it.
-const postUrl = new URL(post.url);
-if (postUrl.protocol !== 'https:' || !/(^|\.)(x\.com|twitter\.com)$/.test(postUrl.hostname)) {
-  throw new Error(`POST.json url must be an https://x.com or twitter.com post address, got: ${post.url}`);
-}
+const post = loadPost(repoDir);
+assertXPost(post.url);
 
 mkdirSync(outputDir, { recursive: true });
-writeFileSync(join(outputDir, 'POST.json'), postText);
+writeFileSync(join(outputDir, 'POST.json'), post.text);
